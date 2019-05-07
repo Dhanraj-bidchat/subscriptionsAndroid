@@ -5,6 +5,7 @@ import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.Callback;
+import android.widget.Toast;
 
 public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule {
 
@@ -18,5 +19,10 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule {
   @Override
   public String getName() {
     return "RNSubscriptionsAndroid";
+  }
+
+  @ReactMethod
+  public void showLongToast() {
+    Toast.makeText(reactContext, "This is long toast", Toast.LENGTH_SHORT).show();
   }
 }
