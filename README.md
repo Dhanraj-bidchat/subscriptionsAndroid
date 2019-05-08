@@ -32,7 +32,17 @@
 ```javascript
 import RNSubscriptionsAndroid from 'react-native-subscriptions-android';
 
+OR
+
+import { initBilling,getProducts, subscribeTo } from 'react-native-subscriptions-android';
+
+
+## Usage
 // TODO: What to do with the module?
-RNSubscriptionsAndroid;
-```
+1. Check Billing status
+RNSubscriptionsAndroid.initBilling([productArray, callback]);
+
+// initBilling status is ok,use method 2
+2. RNSubscriptionsAndroid.subscribeTo(oldProduct, newProduct,ProrationMode, Callback)
+
   
