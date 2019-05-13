@@ -58,9 +58,9 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
           // The BillingClient is ready. You can query purchases here.
           cb.invoke(null, "OK");
           Log.e(TAG, "onBillingSetupFinished: "+"BillingClient is ready. You can query purchases here" );
-          loadProducts(null);
         } else {
-          cb.invoke("BillingClient is not ready", null);
+          // cb.invoke("BillingClient is not ready", null);
+          cb.invoke(getErrorJson(responseCode), null);
         }
       }
 
@@ -132,6 +132,7 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
 
   @ReactMethod
   public void subscribeTo(String oldProduct,String productId, int prorationMode, Callback cb) {
+
     purchaseCB = cb;
     boolean isProductExist = false;
     SkuDetails product = null;
@@ -160,6 +161,70 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
 
   }
 
+  @ReactMethod
+  public void subscribeToPlan(final String oldProduct, final String productId, final int prorationMode, final Callback cb) {
+
+    purchaseCB = cb;
+    if(billingClient.isReady()) {
+      SkuDetailsParams.Builder params = SkuDetailsParams.newBuilder();
+      params.setSkusList(subscriptionProducts);
+      params.setType(BillingClient.SkuType.SUBS);
+      billingClient.querySkuDetailsAsync(params.build(), new SkuDetailsResponseListener() {
+        @Override
+        public void onSkuDetailsResponse(int responseCode, List<SkuDetails> skuDetailsList) {
+          Log.e(TAG, "onSkuDetailsResponse: "+responseCode+ "skuDetailsList: "+ skuDetailsList );
+          // Retrieve a value for "skuDetails" by calling querySkuDetailsAsync().
+          if((skuDetailsList != null) && (skuDetailsList.size() > 0)) {
+            skuDetails = new ArrayList<>();
+            skuDetails.addAll(skuDetailsList);
+
+            Log.e(TAG, "loadProducts: productsCallback"+ "skuDetails: "+ skuDetails );
+            purchaseNow(cb, oldProduct, productId, prorationMode, responseCode);
+          } else {
+            //todo: if no products handle
+            Log.e(TAG, "subscribeTo No Products available " );
+            purchaseCB.invoke(getErrorJson(responseCode), null);
+          }
+        }
+      });
+    } else {
+      Toast.makeText(reactContext, "Billing client not ready yet", Toast.LENGTH_SHORT);
+    }
+
+  }
+
+
+  public void purchaseNow(Callback cb, String oldProduct, String productId, int prorationMode, int responseCode) {
+
+    purchaseCB = cb;
+    boolean isProductExist = false;
+    SkuDetails product = null;
+    Log.e(TAG, "subscribeTo: oldProduct: "+oldProduct+" productId: "+productId+" prorationMode: "+prorationMode);
+    for (int i = 0; i < skuDetails.size(); i++) {
+      SkuDetails details = skuDetails.get(i);
+      Log.e(TAG, "subscribeTo: details"+ details.getSku());
+      if(details.getSku().equals(productId)) {
+//        Toast.makeText(reactContext, "Product exists", Toast.LENGTH_SHORT).show();
+        product = skuDetails.get(i);
+        isProductExist = true;
+        break;
+      }
+      Log.e(TAG, "subscribeTo: details doing");
+    }
+
+    Log.e(TAG, "subscribeTo: details done");
+    if(isProductExist) {
+//      purchaseCB.invoke(null, "Product Exists");
+      Log.e(TAG, "subscribeTo PRODUCT EXISTS " );
+      purchaseDigitalProduct(oldProduct,product, prorationMode);
+    } else {
+      Log.e(TAG, "subscribeTo PRODUCT NOT EXISTS " );
+//      purchaseCB.invoke("Product not Exist", null);
+      purchaseCB.invoke(getErrorJson(responseCode), null);
+    }
+
+  }
+
   /**
    *
    * @param productToBuy- product to purchase
@@ -168,11 +233,13 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
    * note: pass prorationMode = 2 for upgrading and prorationMode = 4 for downgrading
    */
   public void purchaseDigitalProduct(String oldProduct,SkuDetails productToBuy,  int prorationMode) {
+    Log.e(TAG, "purchaseDigitalProduct: oldProduct: "+oldProduct+ " productToBuy: "+ productToBuy.getSku()+ "prorationMode: "+prorationMode );
     BillingFlowParams.Builder flowParams = BillingFlowParams.newBuilder();
     flowParams.setSkuDetails(productToBuy);
-    if(oldProduct != null) {
+    if(oldProduct != null) { // && !oldProduct.equals(productToBuy.getSku())
+      Log.e(TAG, "purchaseDigitalProduct: "+ "applying proration" );
       flowParams.setOldSku(oldProduct);
-      flowParams.setReplaceSkusProrationMode(prorationMode);
+      flowParams.setReplaceSkusProrationMode((prorationMode == 0) ? BillingFlowParams.ProrationMode.IMMEDIATE_WITH_TIME_PRORATION :prorationMode);
     }
 
     int responseCode2 = billingClient.launchBillingFlow(getReactApplicationContext().getCurrentActivity(), flowParams.build());
@@ -184,63 +251,75 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
   public void onPurchasesUpdated(int responseCode, @Nullable List<Purchase> purchases) {
     Log.e(TAG, "onPurchasesUpdated: "+ responseCode+ " purchases: "+ purchases );
 
-    JSONObject errorPurchase = new JSONObject();
-    String errorMsg = null;
     if (responseCode == BillingClient.BillingResponse.OK
             && purchases != null) {
       for (Purchase purchase : purchases) {
         handlePurchase(purchase);
+//        purchaseCB.invoke(null, purchase.toString());
       }
     } else {
-      switch (responseCode) {
-        case BillingClient.BillingResponse.USER_CANCELED://1
-          errorMsg = "User pressed back or canceled a dialog";
-        break;
-        case BillingClient.BillingResponse.SERVICE_UNAVAILABLE://2
-          errorMsg = "Network connection is down";
-          break;
-        case BillingClient.BillingResponse.BILLING_UNAVAILABLE://3
-          errorMsg = "Billing API version is not supported for the type requested ";
-          break;
-        case BillingClient.BillingResponse.ITEM_UNAVAILABLE://4
-          errorMsg = "Requested product is not available for purchase";
-          break;
-        case BillingClient.BillingResponse.DEVELOPER_ERROR: //5
-          errorMsg = "Invalid arguments provided to the API";
-          break;
-        case BillingClient.BillingResponse.ERROR: //6
-          errorMsg = "Fatal error during the API action";
-          break;
-        case BillingClient.BillingResponse.ITEM_ALREADY_OWNED: //7
-          errorMsg = "Failure to purchase since item is already owned";
-          break;
-        case BillingClient.BillingResponse.SERVICE_DISCONNECTED: //8
-          errorMsg = "Failure to consume since item is not owned ";
-          break;
-        case BillingClient.BillingResponse.SERVICE_TIMEOUT: //-1
-          errorMsg = "The request has reached the maximum timeout before Google Play responds";
-          break;
-        case BillingClient.BillingResponse.FEATURE_NOT_SUPPORTED: //-2
-          errorMsg = "Requested feature is not supported by Play Store on the current device.";
-          break;
-          default://BillingClient.BillingResponse.OK
-            errorMsg = "Purchase Successful";
-            break;
-      }
-      //Error callback here
-      try {
-        errorPurchase.put("errorCode", responseCode);
-        errorPurchase.put("errorMessage", errorMsg);
-      } catch (JSONException e) {
-        e.printStackTrace();
-      }
-      purchaseCB.invoke(errorPurchase.toString(), null);
+//      //Error callback here
+      purchaseCB.invoke(getErrorJson(responseCode), null);
     }
+  }
+
+  public String getBillingResponse(int responseCode) {
+    String errorMsg = "";
+    switch (responseCode) {
+      case BillingClient.BillingResponse.USER_CANCELED://1
+        errorMsg = "User pressed back or canceled a dialog";
+        break;
+      case BillingClient.BillingResponse.SERVICE_UNAVAILABLE://2
+        errorMsg = "Network connection is down";
+        break;
+      case BillingClient.BillingResponse.BILLING_UNAVAILABLE://3
+        errorMsg = "Billing API version is not supported for the type requested ";
+        break;
+      case BillingClient.BillingResponse.ITEM_UNAVAILABLE://4
+        errorMsg = "Requested product is not available for purchase";
+        break;
+      case BillingClient.BillingResponse.DEVELOPER_ERROR: //5
+        errorMsg = "Invalid arguments provided to the API";
+        break;
+      case BillingClient.BillingResponse.ERROR: //6
+        errorMsg = "Fatal error during the API action";
+        break;
+      case BillingClient.BillingResponse.ITEM_ALREADY_OWNED: //7
+        errorMsg = "Failure to purchase since item is already owned";
+        break;
+      case BillingClient.BillingResponse.SERVICE_DISCONNECTED: //8
+        errorMsg = "Failure to consume since item is not owned ";
+        break;
+      case BillingClient.BillingResponse.SERVICE_TIMEOUT: //-1
+        errorMsg = "The request has reached the maximum timeout before Google Play responds";
+        break;
+      case BillingClient.BillingResponse.FEATURE_NOT_SUPPORTED: //-2
+        errorMsg = "Requested feature is not supported by Play Store on the current device.";
+        break;
+      default://BillingClient.BillingResponse.OK
+        errorMsg = "Purchase Successful";
+        break;
+    }
+
+    return errorMsg;
+  }
+
+  public String getErrorJson(int responseCode) {
+    //Error callback here
+    JSONObject errorPurchase = new JSONObject();
+    try {
+      errorPurchase.put("errorCode", responseCode);
+      errorPurchase.put("errorMessage", getBillingResponse(responseCode));
+    } catch (JSONException e) {
+      e.printStackTrace();
+    }
+    Log.e(TAG, "getErrorJson: "+errorPurchase);
+    return errorPurchase.toString();
   }
 
   private void handlePurchase(Purchase purchase) {
     Log.e(TAG, "handlePurchase success: "+ purchase );
-    purchaseCB.invoke(null, purchase.toString());
+    purchaseCB.invoke(null, purchase.getPurchaseToken());
   }
 
 
