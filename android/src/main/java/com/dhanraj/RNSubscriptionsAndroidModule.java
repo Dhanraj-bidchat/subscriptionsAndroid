@@ -5,6 +5,7 @@ import com.android.billingclient.api.BillingClient;
 import com.android.billingclient.api.BillingClientStateListener;
 import com.android.billingclient.api.BillingFlowParams;
 import com.android.billingclient.api.Purchase;
+import com.android.billingclient.api.PurchaseHistoryResponseListener;
 import com.android.billingclient.api.PurchasesUpdatedListener;
 import com.android.billingclient.api.SkuDetails;
 import com.android.billingclient.api.SkuDetailsParams;
@@ -46,8 +47,8 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
   @ReactMethod
   public void initBillingClient(String products, final Callback cb) {
 
-      String ProductData  = products.replace("[", "").replace("]", "")
-              .replace("\"", "");
+    String ProductData  = products.replace("[", "").replace("]", "")
+            .replace("\"", "");
     subscriptionProducts = new ArrayList<>(Arrays.asList(ProductData.split(",")));
     billingClient = BillingClient.newBuilder(this.reactContext).setListener(this).build();
     billingClient.startConnection(new BillingClientStateListener() {
@@ -118,10 +119,10 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
         }
       });
     } else {
-        if(pCallback != null) {
-            Log.e(TAG, "ProductsLoaded: billing client not ready " );
-            pCallback.invoke("[]");
-        }
+      if(pCallback != null) {
+        Log.e(TAG, "ProductsLoaded: billing client not ready " );
+        pCallback.invoke("[]");
+      }
     }
   }
 
@@ -256,9 +257,25 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
       for (Purchase purchase : purchases) {
         handlePurchase(purchase);
 //        purchaseCB.invoke(null, purchase.toString());
+
       }
+    } else if(responseCode == BillingClient.BillingResponse.OK) {
+      //history
+      billingClient.queryPurchaseHistoryAsync(BillingClient.SkuType.SUBS, new PurchaseHistoryResponseListener() {
+        @Override
+        public void onPurchaseHistoryResponse(int responseCode, List<Purchase> purchasesList) {
+          Log.e(TAG, "onPurchaseHistoryResponse: "+ responseCode+ " purchasesList: "+ purchasesList );
+          if(purchasesList != null) {
+            Purchase purchase = purchasesList.get(0);
+            Log.e(TAG, "onPurchaseHistoryResponse: "+ " purchasesListUpdated: "+ purchase );
+            purchaseCB.invoke(null, purchase.getPurchaseToken());
+          } else {
+            purchaseCB.invoke(getErrorJson(responseCode), null);
+          }
+        }
+      });
     } else {
-//      //Error callback here
+      //Error cases
       purchaseCB.invoke(getErrorJson(responseCode), null);
     }
   }
@@ -337,4 +354,5 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
   public void onSkuDetailsResponse(int responseCode, List<SkuDetails> skuDetailsList) {
     Log.e(TAG, "onSkuDetailsResponse: "+ responseCode+ "skuDetailsList: "+ skuDetailsList );
   }
+
 }
