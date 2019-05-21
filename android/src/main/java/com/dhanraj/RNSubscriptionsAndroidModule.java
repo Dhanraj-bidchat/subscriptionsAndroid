@@ -60,14 +60,25 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
           cb.invoke(null, "OK");
           Log.e(TAG, "onBillingSetupFinished: "+"BillingClient is ready. You can query purchases here" );
         } else {
+          Log.e(TAG, "onBillingSetupFinished: 11" );
+          billingClient.endConnection();
           // cb.invoke("BillingClient is not ready", null);
-          cb.invoke(getErrorJson(responseCode), null);
+
+          try {
+            Log.e(TAG, "onBillingSetupFinished: 111" );
+            cb.invoke(getErrorJson(responseCode), null);
+          }catch (Exception e) {
+            Log.e(TAG, "onBillingSetupFinished: 112" );
+            e.printStackTrace();
+          }
         }
       }
 
       @Override
       public void onBillingServiceDisconnected() {
-        Log.e(TAG, "onBillingServiceDisconnected: " );
+        Log.e(TAG, "onBillingServiceDisconnected: 1" );
+//        purchaseCB.invoke(getErrorJson(3), null);
+        billingClient.endConnection();
       }
     });
     Log.e(TAG, "initBillingClient CALING: "+ billingClient.isReady() );
@@ -182,6 +193,7 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
             Log.e(TAG, "loadProducts: productsCallback"+ "skuDetails: "+ skuDetails );
             purchaseNow(cb, oldProduct, productId, prorationMode, responseCode);
           } else {
+            billingClient.endConnection();
             //todo: if no products handle
             Log.e(TAG, "subscribeTo No Products available " );
             purchaseCB.invoke(getErrorJson(responseCode), null);
@@ -219,6 +231,7 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
       Log.e(TAG, "subscribeTo PRODUCT EXISTS " );
       purchaseDigitalProduct(oldProduct,product, prorationMode);
     } else {
+      billingClient.endConnection();
       Log.e(TAG, "subscribeTo PRODUCT NOT EXISTS " );
 //      purchaseCB.invoke("Product not Exist", null);
       purchaseCB.invoke(getErrorJson(responseCode), null);
@@ -268,15 +281,24 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
           if(purchasesList != null) {
             Purchase purchase = purchasesList.get(0);
             Log.e(TAG, "onPurchaseHistoryResponse: "+ " purchasesListUpdated: "+ purchase );
+            billingClient.endConnection();
             purchaseCB.invoke(null, purchase.getPurchaseToken());
           } else {
+            billingClient.endConnection();
             purchaseCB.invoke(getErrorJson(responseCode), null);
           }
         }
       });
     } else {
+      billingClient.endConnection();
+      Log.e(TAG, "onPurchasesUpdated errorthrown: re" );
       //Error cases
-      purchaseCB.invoke(getErrorJson(responseCode), null);
+      try {
+        purchaseCB.invoke(getErrorJson(responseCode), null);
+      } catch (Exception e) {
+        Log.e(TAG, "onPurchasesUpdated errorthrown: "+ e.getMessage() );
+        e.printStackTrace();
+      }
     }
   }
 
@@ -336,6 +358,7 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
 
   private void handlePurchase(Purchase purchase) {
     Log.e(TAG, "handlePurchase success: "+ purchase );
+    billingClient.endConnection();
     purchaseCB.invoke(null, purchase.getPurchaseToken());
   }
 
@@ -347,7 +370,8 @@ public class RNSubscriptionsAndroidModule extends ReactContextBaseJavaModule
 
   @Override
   public void onBillingServiceDisconnected() {
-    Log.e(TAG, "onBillingServiceDisconnected: " );
+    Log.e(TAG, "onBillingServiceDisconnected: 2" );
+//    purchaseCB.invoke(getErrorJson(3), null);
   }
 
   @Override
